@@ -2,18 +2,26 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { buildMenu, type MenuState } from './menu'
+import { registerFileHandlers } from './files'
 
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1320,
+    height: 840,
+    minWidth: 1024,
+    minHeight: 640,
     show: false,
-    autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
+    backgroundColor: '#ffffff',
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 8 } }
+      : {}),
+    ...(process.platform !== 'darwin' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      additionalArguments: [`--app-version=${app.getVersion()}`]
     }
   })
 
@@ -49,8 +57,22 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  // Packaged builds take the dock icon from build/icon.icns; dev runs would show Electron's default.
+  if (process.platform === 'darwin') app.dock?.setIcon(icon)
+
+  const menuState: MenuState = { language: 'ru', documentOpen: false }
+  buildMenu(menuState)
+  ipcMain.on('set-language', (_, language: unknown) => {
+    if (language !== 'ru' && language !== 'en') return
+    menuState.language = language
+    buildMenu(menuState)
+  })
+  ipcMain.on('set-document-open', (_, documentOpen: unknown) => {
+    menuState.documentOpen = documentOpen === true
+    buildMenu(menuState)
+  })
+
+  registerFileHandlers()
 
   createWindow()
 
